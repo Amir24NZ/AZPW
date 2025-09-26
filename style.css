@@ -1,0 +1,183 @@
+@font-face {
+    font-family: 'Vazirmatn';
+    src: url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.0.3/Vazirmatn-Regular.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'PixelFont';
+    src: url('https://fonts.cdnfonts.com/s/43407/PressStart2P-Regular.woff') format('woff');
+}
+
+body, html {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    font-family: 'Vazirmatn', sans-serif;
+    background-color: #000;
+    color: white;
+}
+
+#game-container {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    position: relative;
+    background-color: black;
+}
+
+#image-frame {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+#game-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+    transition: opacity 0.5s ease-in-out;
+}
+
+/* ترنزیشن‌ها */
+.fade-transition {
+    animation: fade-in 1.5s forwards;
+}
+
+@keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.black-fade-transition {
+    animation: black-fade 2s forwards;
+}
+
+@keyframes black-fade {
+    0% { opacity: 1; }
+    49% { opacity: 0; }
+    50% { opacity: 0; display: none; }
+    51% { opacity: 0; display: block; }
+    100% { opacity: 1; }
+}
+
+/* کادر متن */
+#text-box-container {
+    position: relative;
+    width: 90%;
+    max-width: 600px;
+    margin-bottom: 20px;
+    z-index: 10;
+}
+
+#text-box {
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 20px;
+    border-radius: 15px;
+    backdrop-filter: blur(5px);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3),
+                2px 2px 0px #444,
+                4px 4px 0px #222;
+    color: white;
+    font-size: 1.1em;
+    text-shadow: 2px 2px 0px black;
+    border: 2px solid #888;
+}
+
+#speaker-name {
+    position: absolute;
+    top: -30px;
+    right: 15px;
+    background-color: #333;
+    color: white;
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 0.9em;
+    box-shadow: 1px 1px 0px #111;
+}
+
+/* دکمه‌ها */
+#buttons-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 30px;
+    z-index: 10;
+    width: 90%;
+    max-width: 600px;
+}
+
+button {
+    font-family: 'PixelFont', cursive;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1em;
+    transition: all 0.1s ease-in-out;
+    box-shadow: 3px 3px 0px #222;
+    border-radius: 8px;
+    background-color: #555;
+    padding: 10px 20px;
+}
+
+button:hover {
+    transform: translate(1px, 1px);
+    box-shadow: 2px 2px 0px #111;
+}
+
+button#start-button,
+button#next-button {
+    background-color: #4CAF50;
+    padding: 15px 30px;
+    flex-grow: 1;
+    border-radius: 10px;
+}
+
+button#back-button {
+    background-color: #f44336;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.5em;
+    line-height: 1;
+    padding: 0;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* برای ریسپانسیو بودن دکمه‌ها در سایزهای کوچک‌تر */
+@media (max-width: 480px) {
+    #buttons-container {
+        flex-direction: column;
+        gap: 10px;
+    }
+    button#next-button {
+        width: 90%;
+    }
+    button#back-button {
+        position: absolute;
+        bottom: 30px;
+        left: 20px;
+        width: 45px;
+        height: 45px;
+        font-size: 1.3em;
+    }
+}
