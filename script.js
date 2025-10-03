@@ -961,6 +961,11 @@ const gameImage = document.getElementById('game-image');
 const textContent = document.getElementById('text-content');
 const speakerName = document.getElementById('speaker-name');
 const imageFrame = document.getElementById('image-frame');
+const gameContainer = document.getElementById('game-container'); 
+const loadingScreen = document.getElementById('loading-screen'); 
+const progressBar = document.getElementById('progress-bar'); 
+const loadingPercentage = document.getElementById('loading-percentage'); 
+
 let currentSceneIndex = -1;
 let audioPlayer = new Audio();
 let currentAudioSrc = null;
@@ -988,7 +993,8 @@ function showScene(index) {
             currentAudioSrc = scene.music;
             audioPlayer.src = currentAudioSrc;
             audioPlayer.loop = true;
-            audioPlayer.play();
+            // تلاش برای پخش، اما اگر مرورگر اجازه ندهد، خطا را مدیریت می‌کند.
+            audioPlayer.play().catch(e => console.error("Error playing audio (likely waiting for user interaction):", e)); 
         } else if (!scene.music && currentAudioSrc && scene.music !== audioPlayer.src) {
             audioPlayer.pause();
             currentAudioSrc = null;
@@ -1042,7 +1048,7 @@ function endGame() {
     if (currentAudioSrc !== 'audio/end_music.mp3') {
         audioPlayer.src = 'audio/end_music.mp3';
         audioPlayer.loop = true;
-        audioPlayer.play();
+        audioPlayer.play().catch(e => console.error("Error playing end audio:", e));
         currentAudioSrc = 'audio/end_music.mp3';
     }
 
@@ -1055,17 +1061,105 @@ function endGame() {
     currentSceneIndex = -1;
 }
 
-// گوش دادن به کلیک دکمه‌ها
-startButton.addEventListener('click', startGame);
-nextButton.addEventListener('click', nextScene);
-backButton.addEventListener('click', prevScene);
+// --- منطق جدید پیش‌بارگذاری (Preloading) ---
 
-// تنظیمات اولیه
-document.addEventListener('DOMContentLoaded', () => {
+// 1. جمع‌آوری لیست منابع
+function collectAssets() {
+    const assets = new Set();
+
+    // عکس‌های سکانس‌ها
+    scenes.forEach(scene => {
+        if (scene.image) assets.add(scene.image);
+        if (scene.music) assets.add(scene.music);
+    });
+
+    // اضافه کردن عکس‌ها و موزیک‌های ثابت (مثل عکس شروع و پایان و موزیک شروع و پایان)
+    assets.add('images/s1.jpg'); // عکس صفحه شروع
+    assets.add('audio/start_music.mp3'); // موزیک صفحه شروع
+    assets.add('audio/end_music.mp3'); // موزیک پایان بازی
+
+    return Array.from(assets);
+}
+
+// 2. تابع پیش‌بارگذاری
+async function preloadAssets(assets) {
+    let loadedCount = 0;
+    const totalAssets = assets.length;
+
+    const loadPromises = assets.map(assetUrl => {
+        return new Promise((resolve, reject) => {
+            const extension = assetUrl.split('.').pop().toLowerCase();
+            let element;
+
+            if (['jpg', 'jpeg', 'png', 'gif'].includes(extension)) {
+                // بارگذاری تصویر
+                element = new Image();
+                element.onload = () => {
+                    loadedCount++;
+                    updateProgressBar(loadedCount, totalAssets);
+                    resolve();
+                };
+                element.onerror = () => {
+                    console.warn(`Failed to load image: ${assetUrl}`);
+                    loadedCount++; // همچنان پیشرفت را نشان بدهیم
+                    updateProgressBar(loadedCount, totalAssets);
+                    resolve(); // رد نشدن برای جلوگیری از توقف لودینگ
+                };
+                element.src = assetUrl;
+            } else if (['mp3', 'wav', 'ogg'].includes(extension)) {
+                // بارگذاری فایل صوتی (با تگ Audio)
+                element = new Audio();
+                element.addEventListener('canplaythrough', () => {
+                    loadedCount++;
+                    updateProgressBar(loadedCount, totalAssets);
+                    resolve();
+                }, { once: true });
+                element.onerror = () => {
+                    console.warn(`Failed to load audio: ${assetUrl}`);
+                    loadedCount++;
+                    updateProgressBar(loadedCount, totalAssets);
+                    resolve();
+                };
+                element.src = assetUrl;
+                element.load(); // شروع بارگذاری
+            } else {
+                // بقیه فایل‌ها (مثلاً اگر نوع دیگری اضافه شود)
+                loadedCount++;
+                updateProgressBar(loadedCount, totalAssets);
+                resolve();
+            }
+        });
+    });
+
+    await Promise.all(loadPromises);
+}
+
+// 3. تابع به‌روزرسانی نوار پیشرفت
+function updateProgressBar(loaded, total) {
+    const percentage = Math.floor((loaded / total) * 100);
+    progressBar.style.width = percentage + '%';
+    loadingPercentage.textContent = percentage + '%';
+}
+
+// 4. تابع اصلی برای آماده‌سازی بازی
+async function initializeGame() {
+    const assetsToLoad = collectAssets();
+    console.log(`Starting to preload ${assetsToLoad.length} assets...`);
+
+    // شروع پیش‌بارگذاری
+    await preloadAssets(assetsToLoad);
+
+    console.log("All assets preloaded. Starting game.");
+
+    // مخفی کردن لودینگ و نمایش کانتینر بازی
+    loadingScreen.classList.add('hidden');
+    gameContainer.classList.remove('hidden');
+
+    // تنظیمات اولیه بازی 
     // پخش موزیک صفحه شروع
     audioPlayer.src = 'audio/start_music.mp3';
     audioPlayer.loop = true;
-    audioPlayer.play();
+    audioPlayer.play().catch(e => console.log("Audio playback waiting for user interaction."));
     currentAudioSrc = 'audio/start_music.mp3';
 
     nextButton.classList.add('hidden');
@@ -1074,4 +1168,12 @@ document.addEventListener('DOMContentLoaded', () => {
     gameImage.src = 'images/s1.jpg';
     textContent.textContent = 'برای شروع بازی دکمه زیر را فشار دهید.';
     speakerName.textContent = '';
-});
+}
+
+// --- گوش دادن به کلیک دکمه‌ها ---
+startButton.addEventListener('click', startGame);
+nextButton.addEventListener('click', nextScene);
+backButton.addEventListener('click', prevScene);
+
+// شروع فرآیند بارگذاری پس از لود شدن DOM
+document.addEventListener('DOMContentLoaded', initializeGame);

@@ -4,13 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Azin Pixel World</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=1.2">
     <link rel="icon" href="images/s1.jpg" type="image/x-icon">
 </head>
 <body>
 
-    <div id="game-container">
-        <div id="image-frame">
+    <div id="loading-screen">
+        <div id="loading-text">در حال بارگذاری دیتا...</div>
+        <div id="progress-bar-container">
+            <div id="progress-bar"></div>
+        </div>
+        <div id="loading-percentage">0%</div>
+    </div>
+    <div id="game-container" class="hidden"> <div id="image-frame">
             <img id="game-image" src="" alt="سکانس بازی">
         </div>
 
@@ -28,6 +34,6 @@
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script src="script.js?v=1.2"></script>
 </body>
 </html>
