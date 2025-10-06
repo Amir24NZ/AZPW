@@ -972,16 +972,25 @@ const loadingPercentage = document.getElementById('loading-percentage');
 let currentSceneIndex = -1;
 let audioPlayer = new Audio();
 let currentAudioSrc = null;
-
+const loadedAssets = new Map(); // ⭐جدید: Map برای ذخیره Object URLs برای دسترسی سریع
 // =========================================================
 // [Fix #2] رفع مشکل کشینگ دیتا با نسخه‌بندی (Versioning)
 // =========================================================
-const ASSET_VERSION = '?v=1.0'; // این را هر بار که یک عکس یا فایل صوتی را تغییر می‌دهید، به 1.1، 1.2 و... تغییر دهید.
+const ASSET_VERSION = '?v=1.0'; // این را هر بار که یک عکس یا فایل صوتی را تغییر می‌دهید، تغییر دهید.
 
-// تابع کمکی برای اعمال نسخه‌بندی به URL منابع
+// تابع کمکی برای اعمال نسخه‌بندی یا بازگرداندن Object URL
 function getAssetUrl(baseUrl) {
     if (!baseUrl || baseUrl.startsWith('blob:')) return baseUrl;
-    // اگر URL قبلاً پارامتر '?v=' را نداشت، آن را اضافه کن
+    
+    // کلید Map همیشه URL تمیز است
+    const cleanUrl = baseUrl.split('?')[0]; 
+
+    // ⭐جدید: اگر فایل قبلاً دانلود و به صورت Object URL ذخیره شده، آن را برگردان.
+    if (loadedAssets.has(cleanUrl)) {
+        return loadedAssets.get(cleanUrl);
+    }
+    
+    // اگر Object URL در دسترس نبود (که نباید رخ دهد)، از URL اصلی با نسخه‌بندی استفاده کن.
     if (!baseUrl.includes('?v=')) {
         return baseUrl + ASSET_VERSION;
     }
@@ -1002,19 +1011,18 @@ function showScene(index) {
     
     // تأخیر برای اعمال ترنزیشن و نمایش انیمیشن
     setTimeout(() => {
-        // اعمال تابع getAssetUrl برای بارگذاری تصاویر از کش
+        // اعمال تابع getAssetUrl که حالا Object URL سریع را برمی‌گرداند
         gameImage.src = getAssetUrl(scene.image);
         textContent.textContent = scene.text;
         speakerName.textContent = scene.speaker || '';
 
         // مدیریت موزیک
-        const musicUrl = getAssetUrl(scene.music); // اعمال تابع getAssetUrl برای موزیک
+        const musicUrl = getAssetUrl(scene.music); // اعمال getAssetUrl
         
         if (musicUrl && musicUrl !== currentAudioSrc) {
             currentAudioSrc = musicUrl;
             audioPlayer.src = currentAudioSrc;
             audioPlayer.loop = true;
-            // تلاش برای پخش، اما اگر مرورگر اجازه ندهد، خطا را مدیریت می‌کند.
             audioPlayer.play().catch(e => console.error("Error playing audio (likely waiting for user interaction):", e)); 
         } else if (!scene.music && currentAudioSrc && scene.music !== audioPlayer.src) {
             audioPlayer.pause();
@@ -1077,7 +1085,7 @@ function endGame() {
     }
 
     // تنظیم محتوای صفحه پایانی
-    gameImage.src = getAssetUrl('images/q7.jpg'); // اعمال getAssetUrl برای عکس پایانی
+    gameImage.src = getAssetUrl('images/q7.jpg'); // عکس پایانی - اعمال getAssetUrl
     textContent.textContent = 'پایان :)';
     speakerName.textContent = '';
     nextButton.classList.add('hidden');
@@ -1087,74 +1095,76 @@ function endGame() {
 
 // --- منطق جدید پیش‌بارگذاری (Preloading) ---
 
-// 1. جمع‌آوری لیست منابع
+// 1. جمع‌آوری لیست منابع (URLهای تمیز و بدون نسخه‌بندی)
 function collectAssets() {
-    const assets = new Set();
+    const assets = new Set(); 
 
     // عکس‌های سکانس‌ها
     scenes.forEach(scene => {
-        // اعمال getAssetUrl برای آدرس‌های جمع‌آوری شده
-        if (scene.image) assets.add(getAssetUrl(scene.image)); 
-        if (scene.music) assets.add(getAssetUrl(scene.music));
+        if (scene.image) assets.add(scene.image);
+        if (scene.music) assets.add(scene.music);
     });
 
     // اضافه کردن عکس‌ها و موزیک‌های ثابت
-    assets.add(getAssetUrl('images/s1.jpg')); // عکس صفحه شروع
-    assets.add(getAssetUrl('audio/start_music.mp3')); // موزیک صفحه شروع
-    assets.add(getAssetUrl('audio/end_music.mp3')); // موزیک پایان بازی
+    assets.add('images/s1.jpg'); // عکس صفحه شروع
+    assets.add('audio/start_music.mp3'); // موزیک صفحه شروع
+    assets.add('audio/end_music.mp3'); // موزیک پایان بازی
 
-    return Array.from(assets);
+    // URLها را تمیز (بدون ?v=) می‌کنیم تا کلید Map یکسان باشد
+    const cleanAssets = new Set(); 
+    assets.forEach(asset => {
+        cleanAssets.add(asset.split('?')[0]);
+    });
+
+    return Array.from(cleanAssets); // لیست تمیز برای دانلود کامل
 }
 
-// ... (بقیه کدهای شما تا این قسمت دست نخورده باقی می‌ماند) ...
-
-
-// 2. تابع پیش‌بارگذاری با استفاده از Fetch (قطعی‌تر برای تلگرام)
-async function preloadAssets(assets) {
+// 2. ⭐تابع پیش‌بارگذاری با استفاده از Blob URL (دانلود قطعی)
+async function preloadAssets(assets) { 
     let loadedCount = 0;
     const totalAssets = assets.length;
 
     const loadPromises = assets.map(assetUrl => {
-        return new Promise(async (resolve, reject) => {
-            const extension = assetUrl.split('.').pop().toLowerCase().split('?')[0];
+        // assetUrl در اینجا Clean URL است (مثلاً images/s1.jpg)
+        
+        return new Promise(async (resolve) => {
+            if (loadedAssets.has(assetUrl)) { // اگر قبلاً لود شده، رد شو
+                loadedCount++;
+                updateProgressBar(loadedCount, totalAssets);
+                return resolve();
+            }
 
-            // 1. **اجبار به دانلود کامل با استفاده از fetch**
             try {
-                // این دستور مطمئن می‌شود که فایل به صورت کامل از شبکه دانلود می‌شود
-                // و در حافظه کش مرورگر قرار می‌گیرد.
-                const response = await fetch(assetUrl);
+                // 1. دانلود کامل فایل به صورت Blob (اجبار به دانلود)
+                const response = await fetch(assetUrl); 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
+                const blob = await response.blob();
+                
+                // 2. ساخت Object URL از Blob (آدرس محلی و سریع)
+                const objectUrl = URL.createObjectURL(blob);
+                
+                // 3. ذخیره آدرس محلی برای استفاده در بازی (با کلید آدرس اصلی)
+                loadedAssets.set(assetUrl, objectUrl); 
+                
+                // 4. به‌روزرسانی نوار پیشرفت
+                loadedCount++;
+                updateProgressBar(loadedCount, totalAssets);
+                resolve();
+
             } catch (error) {
-                console.warn(`Failed to fetch and cache asset: ${assetUrl}`, error);
-                // حتی اگر دانلود خطا داد، باز هم ادامه می‌دهیم تا بازی گیر نکند.
-            }
-            
-            // 2. **اعمال روی تگ‌ها (اختیاری اما برای تکمیل بهتر)**
-            if (['jpg', 'jpeg', 'png', 'gif'].includes(extension)) {
-                // برای عکس‌ها، یک تگ Image هم می‌سازیم تا مرورگر آن را رندر کند.
-                const element = new Image();
-                element.onload = resolve;
-                element.onerror = resolve; // اگر خطا داد هم ادامه بده
-                element.src = assetUrl;
-            } else if (['mp3', 'wav', 'ogg'].includes(extension)) {
-                // برای فایل‌های صوتی، فقط دانلود با fetch کافیست.
-                resolve();
-            } else {
+                console.warn(`Failed to preload asset: ${assetUrl}`, error);
+                // حتی در صورت خطا، باید نوار پیشرفت جلو برود تا بازی شروع شود
+                loadedCount++;
+                updateProgressBar(loadedCount, totalAssets);
                 resolve();
             }
-            
-            // 3. **به‌روزرسانی نوار پیشرفت بعد از دانلود و کش شدن**
-            loadedCount++;
-            updateProgressBar(loadedCount, totalAssets);
         });
     });
 
     await Promise.all(loadPromises);
 }
-
-// ... (بقیه کدهای شما تا انتهای فایل دست نخورده باقی می‌ماند) ...
 
 // 3. تابع به‌روزرسانی نوار پیشرفت (بدون تغییر)
 function updateProgressBar(loaded, total) {
@@ -1167,19 +1177,17 @@ function updateProgressBar(loaded, total) {
 async function initializeGame() {
     // === TELEGRAM WEBAPP FULLSCREEN & READY FIX ===
     if (window.Telegram && window.Telegram.WebApp) {
-        // ۱. اعلام آمادگی WebApp
         Telegram.WebApp.ready();
-        // ۲. درخواست حالت تمام صفحه (Full-Screen)
         Telegram.WebApp.expand();
         console.log("Telegram WebApp API initialized and expanded.");
     }
     // =============================================================
 
-    const assetsToLoad = collectAssets(); // این حالا از URLهای نسخه‌بندی شده استفاده می‌کند
+    const assetsToLoad = collectAssets(); // این حالا URLهای تمیز را برای دانلود برمی‌گرداند
     console.log(`Starting to preload ${assetsToLoad.length} assets...`);
 
     // شروع پیش‌بارگذاری
-    await preloadAssets(assetsToLoad);
+    await preloadAssets(assetsToLoad); // منتظر می‌ماند تا تمام دیتا کاملاً دانلود شود
 
     console.log("All assets preloaded. Starting game.");
 
@@ -1188,7 +1196,7 @@ async function initializeGame() {
     gameContainer.classList.remove('hidden');
 
     // تنظیمات اولیه بازی 
-    // پخش موزیک صفحه شروع
+    // پخش موزیک صفحه شروع (از Object URL سریع استفاده می‌شود)
     audioPlayer.src = getAssetUrl('audio/start_music.mp3'); 
     audioPlayer.loop = true;
     audioPlayer.play().catch(e => console.log("Audio playback waiting for user interaction."));
@@ -1197,10 +1205,11 @@ async function initializeGame() {
     nextButton.classList.add('hidden');
     backButton.classList.add('hidden');
     startButton.classList.remove('hidden');
-    // اعمال getAssetUrl برای تصویر صفحه شروع
+    
+    // تنظیم تصویر صفحه شروع (از Object URL سریع استفاده می‌شود)
     gameImage.src = getAssetUrl('images/s1.jpg');
     
-    // ⭐ تغییر جدید: نمایش نسخه در صفحه شروع
+    // نمایش نسخه
     const versionDisplay = ASSET_VERSION.replace('?v=', 'نسخه: ');
     textContent.textContent = `برای شروع بازی دکمه زیر را فشار دهید. (${versionDisplay})`;
     
