@@ -976,7 +976,7 @@ let currentAudioSrc = null;
 // =========================================================
 // [Fix #2] رفع مشکل کشینگ دیتا با نسخه‌بندی (Versioning)
 // =========================================================
-const ASSET_VERSION = '?v=1.1'; // این را هر بار که یک عکس یا فایل صوتی را تغییر می‌دهید، به 1.1، 1.2 و... تغییر دهید.
+const ASSET_VERSION = '?v=1.2'; // این را هر بار که یک عکس یا فایل صوتی را تغییر می‌دهید، به 1.1، 1.2 و... تغییر دهید.
 
 // تابع کمکی برای اعمال نسخه‌بندی به URL منابع
 function getAssetUrl(baseUrl) {
@@ -1106,58 +1106,55 @@ function collectAssets() {
     return Array.from(assets);
 }
 
-// 2. تابع پیش‌بارگذاری (بدون تغییر در منطق)
+// ... (بقیه کدهای شما تا این قسمت دست نخورده باقی می‌ماند) ...
+
+
+// 2. تابع پیش‌بارگذاری با استفاده از Fetch (قطعی‌تر برای تلگرام)
 async function preloadAssets(assets) {
     let loadedCount = 0;
     const totalAssets = assets.length;
 
     const loadPromises = assets.map(assetUrl => {
-        return new Promise((resolve, reject) => {
-            const extension = assetUrl.split('.').pop().toLowerCase().split('?')[0]; // در نظر گرفتن v=1.0?
-            let element;
-            // ... (بقیه منطق لودینگ بدون تغییر) ...
+        return new Promise(async (resolve, reject) => {
+            const extension = assetUrl.split('.').pop().toLowerCase().split('?')[0];
+
+            // 1. **اجبار به دانلود کامل با استفاده از fetch**
+            try {
+                // این دستور مطمئن می‌شود که فایل به صورت کامل از شبکه دانلود می‌شود
+                // و در حافظه کش مرورگر قرار می‌گیرد.
+                const response = await fetch(assetUrl);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+            } catch (error) {
+                console.warn(`Failed to fetch and cache asset: ${assetUrl}`, error);
+                // حتی اگر دانلود خطا داد، باز هم ادامه می‌دهیم تا بازی گیر نکند.
+            }
+            
+            // 2. **اعمال روی تگ‌ها (اختیاری اما برای تکمیل بهتر)**
             if (['jpg', 'jpeg', 'png', 'gif'].includes(extension)) {
-                // بارگذاری تصویر
-                element = new Image();
-                element.onload = () => {
-                    loadedCount++;
-                    updateProgressBar(loadedCount, totalAssets);
-                    resolve();
-                };
-                element.onerror = () => {
-                    console.warn(`Failed to load image: ${assetUrl}`);
-                    loadedCount++; // همچنان پیشرفت را نشان بدهیم
-                    updateProgressBar(loadedCount, totalAssets);
-                    resolve(); // رد نشدن برای جلوگیری از توقف لودینگ
-                };
+                // برای عکس‌ها، یک تگ Image هم می‌سازیم تا مرورگر آن را رندر کند.
+                const element = new Image();
+                element.onload = resolve;
+                element.onerror = resolve; // اگر خطا داد هم ادامه بده
                 element.src = assetUrl;
             } else if (['mp3', 'wav', 'ogg'].includes(extension)) {
-                // بارگذاری فایل صوتی (با تگ Audio)
-                element = new Audio();
-                element.addEventListener('canplaythrough', () => {
-                    loadedCount++;
-                    updateProgressBar(loadedCount, totalAssets);
-                    resolve();
-                }, { once: true });
-                element.onerror = () => {
-                    console.warn(`Failed to load audio: ${assetUrl}`);
-                    loadedCount++;
-                    updateProgressBar(loadedCount, totalAssets);
-                    resolve();
-                };
-                element.src = assetUrl;
-                element.load(); // شروع بارگذاری
+                // برای فایل‌های صوتی، فقط دانلود با fetch کافیست.
+                resolve();
             } else {
-                // بقیه فایل‌ها (مثلاً اگر نوع دیگری اضافه شود)
-                loadedCount++;
-                updateProgressBar(loadedCount, totalAssets);
                 resolve();
             }
+            
+            // 3. **به‌روزرسانی نوار پیشرفت بعد از دانلود و کش شدن**
+            loadedCount++;
+            updateProgressBar(loadedCount, totalAssets);
         });
     });
 
     await Promise.all(loadPromises);
 }
+
+// ... (بقیه کدهای شما تا انتهای فایل دست نخورده باقی می‌ماند) ...
 
 // 3. تابع به‌روزرسانی نوار پیشرفت (بدون تغییر)
 function updateProgressBar(loaded, total) {
