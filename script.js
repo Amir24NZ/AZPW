@@ -954,6 +954,9 @@ const scenes = [
     },
 ];
 
+// تعریف سکانس‌های بازی
+// ... (محتوای scenes array بدون تغییر) ...
+
 const startButton = document.getElementById('start-button');
 const nextButton = document.getElementById('next-button');
 const backButton = document.getElementById('back-button');
@@ -970,6 +973,21 @@ let currentSceneIndex = -1;
 let audioPlayer = new Audio();
 let currentAudioSrc = null;
 
+// =========================================================
+// [Fix #2] رفع مشکل کشینگ دیتا با نسخه‌بندی (Versioning)
+// =========================================================
+const ASSET_VERSION = '?v=1.0'; // این را هر بار که یک عکس یا فایل صوتی را تغییر می‌دهید، به 1.1، 1.2 و... تغییر دهید.
+
+// تابع کمکی برای اعمال نسخه‌بندی به URL منابع
+function getAssetUrl(baseUrl) {
+    if (!baseUrl || baseUrl.startsWith('blob:')) return baseUrl;
+    // اگر URL قبلاً پارامتر '?v=' را نداشت، آن را اضافه کن
+    if (!baseUrl.includes('?v=')) {
+        return baseUrl + ASSET_VERSION;
+    }
+    return baseUrl; 
+}
+
 // تابع برای نمایش یک سکانس
 function showScene(index) {
     if (index < 0 || index >= scenes.length) {
@@ -984,13 +1002,16 @@ function showScene(index) {
     
     // تأخیر برای اعمال ترنزیشن و نمایش انیمیشن
     setTimeout(() => {
-        gameImage.src = scene.image;
+        // اعمال تابع getAssetUrl برای بارگذاری تصاویر از کش
+        gameImage.src = getAssetUrl(scene.image);
         textContent.textContent = scene.text;
         speakerName.textContent = scene.speaker || '';
 
         // مدیریت موزیک
-        if (scene.music && scene.music !== currentAudioSrc) {
-            currentAudioSrc = scene.music;
+        const musicUrl = getAssetUrl(scene.music); // اعمال تابع getAssetUrl برای موزیک
+        
+        if (musicUrl && musicUrl !== currentAudioSrc) {
+            currentAudioSrc = musicUrl;
             audioPlayer.src = currentAudioSrc;
             audioPlayer.loop = true;
             // تلاش برای پخش، اما اگر مرورگر اجازه ندهد، خطا را مدیریت می‌کند.
@@ -1044,16 +1065,19 @@ function prevScene() {
 
 // تابع برای پایان بازی
 function endGame() {
+    // اعمال getAssetUrl برای موزیک پایان بازی
+    const endMusicUrl = getAssetUrl('audio/end_music.mp3'); 
+    
     // موزیک پایان بازی
-    if (currentAudioSrc !== 'audio/end_music.mp3') {
-        audioPlayer.src = 'audio/end_music.mp3';
+    if (currentAudioSrc !== endMusicUrl) {
+        audioPlayer.src = endMusicUrl;
         audioPlayer.loop = true;
         audioPlayer.play().catch(e => console.error("Error playing end audio:", e));
-        currentAudioSrc = 'audio/end_music.mp3';
+        currentAudioSrc = endMusicUrl;
     }
 
     // تنظیم محتوای صفحه پایانی
-    gameImage.src = 'images/q7.jpg'; // عکس پایانی
+    gameImage.src = getAssetUrl('images/q7.jpg'); // اعمال getAssetUrl برای عکس پایانی
     textContent.textContent = 'پایان :)';
     speakerName.textContent = '';
     nextButton.classList.add('hidden');
@@ -1069,28 +1093,29 @@ function collectAssets() {
 
     // عکس‌های سکانس‌ها
     scenes.forEach(scene => {
-        if (scene.image) assets.add(scene.image);
-        if (scene.music) assets.add(scene.music);
+        // اعمال getAssetUrl برای آدرس‌های جمع‌آوری شده
+        if (scene.image) assets.add(getAssetUrl(scene.image)); 
+        if (scene.music) assets.add(getAssetUrl(scene.music));
     });
 
-    // اضافه کردن عکس‌ها و موزیک‌های ثابت (مثل عکس شروع و پایان و موزیک شروع و پایان)
-    assets.add('images/s1.jpg'); // عکس صفحه شروع
-    assets.add('audio/start_music.mp3'); // موزیک صفحه شروع
-    assets.add('audio/end_music.mp3'); // موزیک پایان بازی
+    // اضافه کردن عکس‌ها و موزیک‌های ثابت
+    assets.add(getAssetUrl('images/s1.jpg')); // عکس صفحه شروع
+    assets.add(getAssetUrl('audio/start_music.mp3')); // موزیک صفحه شروع
+    assets.add(getAssetUrl('audio/end_music.mp3')); // موزیک پایان بازی
 
     return Array.from(assets);
 }
 
-// 2. تابع پیش‌بارگذاری
+// 2. تابع پیش‌بارگذاری (بدون تغییر در منطق)
 async function preloadAssets(assets) {
     let loadedCount = 0;
     const totalAssets = assets.length;
 
     const loadPromises = assets.map(assetUrl => {
         return new Promise((resolve, reject) => {
-            const extension = assetUrl.split('.').pop().toLowerCase();
+            const extension = assetUrl.split('.').pop().toLowerCase().split('?')[0]; // در نظر گرفتن v=1.0?
             let element;
-
+            // ... (بقیه منطق لودینگ بدون تغییر) ...
             if (['jpg', 'jpeg', 'png', 'gif'].includes(extension)) {
                 // بارگذاری تصویر
                 element = new Image();
@@ -1134,7 +1159,7 @@ async function preloadAssets(assets) {
     await Promise.all(loadPromises);
 }
 
-// 3. تابع به‌روزرسانی نوار پیشرفت
+// 3. تابع به‌روزرسانی نوار پیشرفت (بدون تغییر)
 function updateProgressBar(loaded, total) {
     const percentage = Math.floor((loaded / total) * 100);
     progressBar.style.width = percentage + '%';
@@ -1143,7 +1168,17 @@ function updateProgressBar(loaded, total) {
 
 // 4. تابع اصلی برای آماده‌سازی بازی
 async function initializeGame() {
-    const assetsToLoad = collectAssets();
+    // === TELEGRAM WEBAPP FULLSCREEN & READY FIX ===
+    if (window.Telegram && window.Telegram.WebApp) {
+        // ۱. اعلام آمادگی WebApp
+        Telegram.WebApp.ready();
+        // ۲. درخواست حالت تمام صفحه (Full-Screen)
+        Telegram.WebApp.expand();
+        console.log("Telegram WebApp API initialized and expanded.");
+    }
+    // =============================================================
+
+    const assetsToLoad = collectAssets(); // این حالا از URLهای نسخه‌بندی شده استفاده می‌کند
     console.log(`Starting to preload ${assetsToLoad.length} assets...`);
 
     // شروع پیش‌بارگذاری
@@ -1157,16 +1192,21 @@ async function initializeGame() {
 
     // تنظیمات اولیه بازی 
     // پخش موزیک صفحه شروع
-    audioPlayer.src = 'audio/start_music.mp3';
+    audioPlayer.src = getAssetUrl('audio/start_music.mp3'); 
     audioPlayer.loop = true;
     audioPlayer.play().catch(e => console.log("Audio playback waiting for user interaction."));
-    currentAudioSrc = 'audio/start_music.mp3';
+    currentAudioSrc = getAssetUrl('audio/start_music.mp3');
 
     nextButton.classList.add('hidden');
     backButton.classList.add('hidden');
     startButton.classList.remove('hidden');
-    gameImage.src = 'images/s1.jpg';
-    textContent.textContent = 'برای شروع بازی دکمه زیر را فشار دهید.';
+    // اعمال getAssetUrl برای تصویر صفحه شروع
+    gameImage.src = getAssetUrl('images/s1.jpg');
+    
+    // ⭐ تغییر جدید: نمایش نسخه در صفحه شروع
+    const versionDisplay = ASSET_VERSION.replace('?v=', 'نسخه: ');
+    textContent.textContent = `برای شروع بازی دکمه زیر را فشار دهید. (${versionDisplay})`;
+    
     speakerName.textContent = '';
 }
 
